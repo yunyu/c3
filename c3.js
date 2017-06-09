@@ -1499,7 +1499,7 @@ c3_chart_internal_fn.redraw = function (options, transitions) {
         });
     }
 
-    if ((duration || flow) && $$.isTabVisible()) { // Only use transition if tab visible. See #938.
+    if (duration || flow) {
         // transition should be derived from one transition
         d3.transition().duration(duration).each(function () {
             var transitionsToWait = [];
@@ -1639,7 +1639,8 @@ c3_chart_internal_fn.initialOpacityForCircle = function (d) {
     return d.value !== null && this.withoutFadeIn[d.id] ? this.opacityForCircle(d) : 0;
 };
 c3_chart_internal_fn.opacityForCircle = function (d) {
-    var opacity = this.config.point_show ? 1 : 0;
+    var isPointShouldBeShown = isFunction(this.config.point_show) ? this.config.point_show(d) : this.config.point_show;
+    var opacity = isPointShouldBeShown ? 1 : 0;
     return isValue(d.value) ? (this.isScatterType(d) ? 0.5 : opacity) : 0;
 };
 c3_chart_internal_fn.opacityForText = function () {
@@ -1897,21 +1898,6 @@ c3_chart_internal_fn.parseDate = function (date) {
         window.console.error("Failed to parse x '" + date + "' to Date object");
     }
     return parsedDate;
-};
-
-c3_chart_internal_fn.isTabVisible = function () {
-    var hidden;
-    if (typeof document.hidden !== "undefined") { // Opera 12.10 and Firefox 18 and later support
-        hidden = "hidden";
-    } else if (typeof document.mozHidden !== "undefined") {
-        hidden = "mozHidden";
-    } else if (typeof document.msHidden !== "undefined") {
-        hidden = "msHidden";
-    } else if (typeof document.webkitHidden !== "undefined") {
-        hidden = "webkitHidden";
-    }
-
-    return document[hidden] ? false : true;
 };
 
 c3_chart_internal_fn.isValue = isValue;
@@ -5051,13 +5037,23 @@ c3_chart_internal_fn.mapTargetsToUniqueXs = function (targets) {
     return xs.sort(function (a, b) { return a < b ? -1 : a > b ? 1 : a >= b ? 0 : NaN; });
 };
 c3_chart_internal_fn.addHiddenTargetIds = function (targetIds) {
-    this.hiddenTargetIds = this.hiddenTargetIds.concat(targetIds);
+    targetIds = (targetIds instanceof Array) ? targetIds : new Array(targetIds);
+    for (var i = 0; i < targetIds.length; i++) {
+        if (this.hiddenTargetIds.indexOf(targetIds[i]) < 0) {
+            this.hiddenTargetIds = this.hiddenTargetIds.concat(targetIds[i]);
+        }
+    }
 };
 c3_chart_internal_fn.removeHiddenTargetIds = function (targetIds) {
     this.hiddenTargetIds = this.hiddenTargetIds.filter(function (id) { return targetIds.indexOf(id) < 0; });
 };
 c3_chart_internal_fn.addHiddenLegendIds = function (targetIds) {
-    this.hiddenLegendIds = this.hiddenLegendIds.concat(targetIds);
+    targetIds = (targetIds instanceof Array) ? targetIds : new Array(targetIds);
+    for (var i = 0; i < targetIds.length; i++) {
+        if (this.hiddenLegendIds.indexOf(targetIds[i]) < 0) {
+            this.hiddenLegendIds = this.hiddenLegendIds.concat(targetIds[i]);
+        }
+    }
 };
 c3_chart_internal_fn.removeHiddenLegendIds = function (targetIds) {
     this.hiddenLegendIds = this.hiddenLegendIds.filter(function (id) { return targetIds.indexOf(id) < 0; });
