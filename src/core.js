@@ -1,6 +1,7 @@
 import Axis from './axis';
 import CLASS from './class';
 import { isValue, isFunction, isString, isUndefined, isDefined, ceil10, asHalfPixel, diffDomain, isEmpty, notEmpty, getOption, hasValue, sanitise, getPathBox } from './util';
+import { timer as d3v4timer } from '../node_modules/d3-timer/index.js';
 
 export var c3 = { version: "0.4.12" };
 
@@ -34,7 +35,7 @@ function Chart(config) {
     $$.beforeInit(config);
     $$.init();
     $$.afterInit(config);
-
+    
     // bind "this" to nested API
     (function bindThis(fn, target, argThis) {
         Object.keys(fn).forEach(function (key) {
@@ -910,10 +911,10 @@ c3_chart_internal_fn.observeInserted = function (selection) {
             if (mutation.type === 'childList' && mutation.previousSibling) {
                 observer.disconnect();
                 // need to wait for completion of load because size calculation requires the actual sizes determined after that completion
-                $$.intervalForObserveInserted = window.setInterval(function () {
+                $$.intervalForObserveInserted = d3v4timer(function () {
                     // parentNode will NOT be null when completed
                     if (selection.node().parentNode) {
-                        window.clearInterval($$.intervalForObserveInserted);
+                        $$.intervalForObserveInserted.stop();
                         $$.updateDimension();
                         if ($$.brush) { $$.brush.update(); }
                         $$.config.oninit.call($$);
@@ -927,7 +928,7 @@ c3_chart_internal_fn.observeInserted = function (selection) {
                         });
                         selection.transition().style('opacity', 1);
                     }
-                }, 10);
+                });
             }
         });
     });
@@ -1010,7 +1011,7 @@ c3_chart_internal_fn.endall = function (transition, callback) {
 c3_chart_internal_fn.generateWait = function () {
     var transitionsToWait = [],
         f = function (transition, callback) {
-            var timer = setInterval(function () {
+            var timer = d3v4timer(function () {
                 var done = 0;
                 transitionsToWait.forEach(function (t) {
                     if (t.empty()) {
@@ -1024,10 +1025,10 @@ c3_chart_internal_fn.generateWait = function () {
                     }
                 });
                 if (done === transitionsToWait.length) {
-                    clearInterval(timer);
+                    timer.stop();
                     if (callback) { callback(); }
                 }
-            }, 10);
+            });
         };
     f.add = function (transition) {
         transitionsToWait.push(transition);

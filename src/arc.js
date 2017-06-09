@@ -1,6 +1,7 @@
 import CLASS from './class';
 import { c3_chart_internal_fn } from './core';
 import { isFunction } from './util';
+import { timer as d3v4timer } from '../node_modules/d3-timer/index.js';
 
 c3_chart_internal_fn.initPie = function () {
     var $$ = this, d3 = $$.d3, config = $$.config;
@@ -151,9 +152,9 @@ c3_chart_internal_fn.expandArc = function (targetIds) {
 
     // MEMO: avoid to cancel transition
     if ($$.transiting) {
-        interval = window.setInterval(function () {
+        interval = d3v4timer(function () {
             if (!$$.transiting) {
-                window.clearInterval(interval);
+                interval.stop();
                 if ($$.legend.selectAll('.c3-legend-item-focused').size() > 0) {
                     $$.expandArc(targetIds);
                 }

@@ -850,6 +850,117 @@ Axis.prototype.redraw = function redraw(transitions, isHidden) {
     transitions.axisSubX.call($$.subXAxis);
 };
 
+var frame = 0;
+var timeout = 0;
+var interval = 0;
+var pokeDelay = 1000;
+var taskHead;
+var taskTail;
+var clockLast = 0;
+var clockNow = 0;
+var clockSkew = 0;
+var clock = typeof performance === "object" && performance.now ? performance : Date;
+var setFrame = typeof window === "object" && window.requestAnimationFrame ? window.requestAnimationFrame.bind(window) : function(f) { setTimeout(f, 17); };
+
+function now() {
+  return clockNow || (setFrame(clearNow), clockNow = clock.now() + clockSkew);
+}
+
+function clearNow() {
+  clockNow = 0;
+}
+
+function Timer() {
+  this._call =
+  this._time =
+  this._next = null;
+}
+
+Timer.prototype = timer.prototype = {
+  constructor: Timer,
+  restart: function(callback, delay, time) {
+    if (typeof callback !== "function") throw new TypeError("callback is not a function");
+    time = (time == null ? now() : +time) + (delay == null ? 0 : +delay);
+    if (!this._next && taskTail !== this) {
+      if (taskTail) taskTail._next = this;
+      else taskHead = this;
+      taskTail = this;
+    }
+    this._call = callback;
+    this._time = time;
+    sleep();
+  },
+  stop: function() {
+    if (this._call) {
+      this._call = null;
+      this._time = Infinity;
+      sleep();
+    }
+  }
+};
+
+function timer(callback, delay, time) {
+  var t = new Timer;
+  t.restart(callback, delay, time);
+  return t;
+}
+
+function timerFlush() {
+  now(); // Get the current time, if not already set.
+  ++frame; // Pretend we’ve set an alarm, if we haven’t already.
+  var t = taskHead, e;
+  while (t) {
+    if ((e = clockNow - t._time) >= 0) t._call.call(null, e);
+    t = t._next;
+  }
+  --frame;
+}
+
+function wake() {
+  clockNow = (clockLast = clock.now()) + clockSkew;
+  frame = timeout = 0;
+  try {
+    timerFlush();
+  } finally {
+    frame = 0;
+    nap();
+    clockNow = 0;
+  }
+}
+
+function poke() {
+  var now = clock.now(), delay = now - clockLast;
+  if (delay > pokeDelay) clockSkew -= delay, clockLast = now;
+}
+
+function nap() {
+  var t0, t1 = taskHead, t2, time = Infinity;
+  while (t1) {
+    if (t1._call) {
+      if (time > t1._time) time = t1._time;
+      t0 = t1, t1 = t1._next;
+    } else {
+      t2 = t1._next, t1._next = null;
+      t1 = t0 ? t0._next = t2 : taskHead = t2;
+    }
+  }
+  taskTail = t0;
+  sleep(time);
+}
+
+function sleep(time) {
+  if (frame) return; // Soonest alarm already set, or will be.
+  if (timeout) timeout = clearTimeout(timeout);
+  var delay = time - clockNow;
+  if (delay > 24) {
+    if (time < Infinity) timeout = setTimeout(wake, delay);
+    if (interval) interval = clearInterval(interval);
+  } else {
+    if (!interval) clockLast = clockNow, interval = setInterval(poke, pokeDelay);
+    frame = 1, setFrame(wake);
+  }
+}
+
 var c3$1 = { version: "0.4.12" };
 
 var c3_chart_fn;
@@ -882,6 +993,8 @@ function Chart(config) {
     $$.beforeInit(config);
     $$.init();
     $$.afterInit(config);
+    
+    console.log(timer);
 
     // bind "this" to nested API
     (function bindThis(fn, target, argThis) {
@@ -1639,7 +1752,8 @@ c3_chart_internal_fn.initialOpacityForCircle = function (d) {
     return d.value !== null && this.withoutFadeIn[d.id] ? this.opacityForCircle(d) : 0;
 };
 c3_chart_internal_fn.opacityForCircle = function (d) {
-    var opacity = this.config.point_show ? 1 : 0;
+    var isPointShouldBeShown = isFunction(this.config.point_show) ? this.config.point_show(d) : this.config.point_show;
+    var opacity = isPointShouldBeShown ? 1 : 0;
     return isValue(d.value) ? (this.isScatterType(d) ? 0.5 : opacity) : 0;
 };
 c3_chart_internal_fn.opacityForText = function () {
@@ -1757,10 +1871,10 @@ c3_chart_internal_fn.observeInserted = function (selection) {
             if (mutation.type === 'childList' && mutation.previousSibling) {
                 observer.disconnect();
                 // need to wait for completion of load because size calculation requires the actual sizes determined after that completion
-                $$.intervalForObserveInserted = window.setInterval(function () {
+                $$.intervalForObserveInserted = timer(function () {
                     // parentNode will NOT be null when completed
                     if (selection.node().parentNode) {
-                        window.clearInterval($$.intervalForObserveInserted);
+                        $$.intervalForObserveInserted.stop();
                         $$.updateDimension();
                         if ($$.brush) { $$.brush.update(); }
                         $$.config.oninit.call($$);
@@ -1774,7 +1888,7 @@ c3_chart_internal_fn.observeInserted = function (selection) {
                         });
                         selection.transition().style('opacity', 1);
                     }
-                }, 10);
+                });
             }
         });
     });
@@ -1857,7 +1971,7 @@ c3_chart_internal_fn.endall = function (transition, callback) {
 c3_chart_internal_fn.generateWait = function () {
     var transitionsToWait = [],
         f = function (transition, callback) {
-            var timer = setInterval(function () {
+            var timer$$1 = timer(function () {
                 var done = 0;
                 transitionsToWait.forEach(function (t) {
                     if (t.empty()) {
@@ -1871,10 +1985,10 @@ c3_chart_internal_fn.generateWait = function () {
                     }
                 });
                 if (done === transitionsToWait.length) {
-                    clearInterval(timer);
+                    timer$$1.stop();
                     if (callback) { callback(); }
                 }
-            }, 10);
+            });
         };
     f.add = function (transition) {
         transitionsToWait.push(transition);
@@ -5051,13 +5165,23 @@ c3_chart_internal_fn.mapTargetsToUniqueXs = function (targets) {
     return xs.sort(function (a, b) { return a < b ? -1 : a > b ? 1 : a >= b ? 0 : NaN; });
 };
 c3_chart_internal_fn.addHiddenTargetIds = function (targetIds) {
-    this.hiddenTargetIds = this.hiddenTargetIds.concat(targetIds);
+    targetIds = (targetIds instanceof Array) ? targetIds : new Array(targetIds);
+    for (var i = 0; i < targetIds.length; i++) {
+        if (this.hiddenTargetIds.indexOf(targetIds[i]) < 0) {
+            this.hiddenTargetIds = this.hiddenTargetIds.concat(targetIds[i]);
+        }
+    }
 };
 c3_chart_internal_fn.removeHiddenTargetIds = function (targetIds) {
     this.hiddenTargetIds = this.hiddenTargetIds.filter(function (id) { return targetIds.indexOf(id) < 0; });
 };
 c3_chart_internal_fn.addHiddenLegendIds = function (targetIds) {
-    this.hiddenLegendIds = this.hiddenLegendIds.concat(targetIds);
+    targetIds = (targetIds instanceof Array) ? targetIds : new Array(targetIds);
+    for (var i = 0; i < targetIds.length; i++) {
+        if (this.hiddenLegendIds.indexOf(targetIds[i]) < 0) {
+            this.hiddenLegendIds = this.hiddenLegendIds.concat(targetIds[i]);
+        }
+    }
 };
 c3_chart_internal_fn.removeHiddenLegendIds = function (targetIds) {
     this.hiddenLegendIds = this.hiddenLegendIds.filter(function (id) { return targetIds.indexOf(id) < 0; });

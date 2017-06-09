@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.js"></script>
+<script src="c3.js"></script>
+<link rel="stylesheet" href="c3.min.css" />
+</head>
+
+<body>
+    <div id="chart"></div>
+    <script>
+        var chart = c3.generate({
+            data: {
+                x: 'x',
+                columns: [
+                    ['x', Date.now()],
+                    ['data1', 230],
+                    ['data2', 190],
+                    ['data3', 90],
+                ]
+            },
+            axis: {
+                x: {
+                    type: 'timeseries',
+                    tick: {
+                        format: '%m/%d',
+                    }
+                }
+            },
+            transition: {
+                duration: 100
+            }
+        });
+
+        var i = 0;
+
+        setInterval(function () {
+            chart.flow({
+                columns: [
+                    ['x', Date.now()],
+                    ['data1', 230 + Math.floor(Math.random() * 100) - 50],
+                    ['data2', 100 + Math.floor(Math.random() * 100) - 50],
+                    ['data3', 200 + Math.floor(Math.random() * 100) - 50],
+                ],
+                duration: 100,
+                length: i > 20 ? 1 : 0
+            });
+            ++i;
+        }, 500);
+    </script>
+</body>
+
+</html>
