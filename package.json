@@ -36,7 +36,8 @@
   "gitHead": "84e03109d9a590f9c8ef687c03d751f666080c6f",
   "readmeFilename": "README.md",
   "dependencies": {
-    "d3": "~3.5.0"
+    "d3": "~3.5.17",
+    "d3-timer": "^1.0.6"
   },
   "devDependencies": {
     "babel-plugin-istanbul": "^4.1.4",
